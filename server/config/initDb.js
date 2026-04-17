@@ -3,12 +3,15 @@ const bcrypt = require("bcryptjs");
 
 const initDB = async () => {
   const promiseDb = db.promise();
+  const shouldDropLegacyTables = String(process.env.DB_DROP_LEGACY_TABLES || "false").toLowerCase() === "true";
 
   try {
-    // ─── Drop old tables from previous schema ───
-    await promiseDb.query("DROP TABLE IF EXISTS certificate_fields");
-    await promiseDb.query("DROP TABLE IF EXISTS participations");
-    await promiseDb.query("DROP TABLE IF EXISTS events");
+    // Drop legacy tables only when explicitly enabled.
+    if (shouldDropLegacyTables) {
+      await promiseDb.query("DROP TABLE IF EXISTS certificate_fields");
+      await promiseDb.query("DROP TABLE IF EXISTS participations");
+      await promiseDb.query("DROP TABLE IF EXISTS events");
+    }
 
     // ─── Departments ───
     await promiseDb.query(`

@@ -1,6 +1,17 @@
 const batchModel = require("../models/batchModel");
 const templateModel = require("../models/templateModel");
 const { generateCertificatePDFBuffer } = require("../services/pdfService");
+const { getMiNoByEmail } = require("../services/userMiMappingService");
+
+const normalizePath = (value, fallback) => {
+  const raw = String(value || fallback || "").trim();
+  const withLeadingSlash = raw.startsWith("/") ? raw : `/${raw}`;
+  return withLeadingSlash.replace(/\/+$/, "") || "/";
+};
+
+const API_BASE_PATH = normalizePath(process.env.API_BASE_PATH, "/api");
+const API_CERTIFICATES_ROUTE = normalizePath(process.env.API_CERTIFICATES_ROUTE, "/certificates");
+const CERTIFICATE_DOWNLOAD_BASE = `${API_BASE_PATH}${API_CERTIFICATES_ROUTE}/download`;
 
 // ─── RELEASE BATCH (no local file storage; use on-demand generation) ───
 exports.releaseBatch = async (req, res) => {
@@ -32,7 +43,7 @@ exports.releaseBatch = async (req, res) => {
     // Save dynamic certificate URLs; PDFs are generated per-download in memory.
     for (const entry of entries) {
       try {
-        const certUrl = `/api/certificates/download/${entry.id}`;
+        const certUrl = `${CERTIFICATE_DOWNLOAD_BASE}/${entry.id}`;
         await batchModel.updateEntryUrl(entry.id, certUrl);
         successCount++;
       } catch (err) {
@@ -56,7 +67,41 @@ exports.releaseBatch = async (req, res) => {
   }
 };
 
-// ─── DOWNLOAD (generate one PDF on demand, no local file write) ───
+// ─── USER: Get certificates for logged-in user via email-to-MI mapping ───
+exports.getMyCertificates = async (req, res) => {
+  try {
+    const email = req.user?.email;
+    const miNo = getMiNoByEmail(email);
+
+    if (!miNo) {
+      return res.status(403).json({
+        message: "No MI number mapped for this email. Contact admin.",
+      });
+    }
+
+    const certs = await batchModel.getReleasedCertsByMiNo(miNo);
+    const certificates = certs.map((item) => ({
+      id: item.id,
+      batch_name: item.batch_name,
+      department_name: item.department_name,
+      template_name: item.template_name,
+      released_at: item.released_at,
+      field_data: typeof item.field_data === "string" ? JSON.parse(item.field_data) : item.field_data,
+      download_url: `${CERTIFICATE_DOWNLOAD_BASE}/${item.id}`,
+    }));
+
+    return res.json({
+      email,
+      miNo,
+      certificates,
+    });
+  } catch (err) {
+    console.error("Get my certificates error:", err);
+    return res.status(500).json({ message: "Failed to fetch certificates" });
+  }
+};
+
+// ─── DOWNLOAD (admin or user; generate one PDF on demand, no local file write) ───
 exports.downloadCertificate = async (req, res) => {
   try {
     const { entry_id } = req.params;
@@ -70,11 +115,26 @@ exports.downloadCertificate = async (req, res) => {
       return res.status(400).json({ message: "Batch is not released yet" });
     }
 
-    if (
-      req.admin.role !== "superadmin" &&
-      Number(entry.department_id) !== Number(req.admin.department_id)
-    ) {
-      return res.status(403).json({ message: "Access denied" });
+    if (req.admin) {
+      if (
+        req.admin.role !== "superadmin" &&
+        Number(entry.department_id) !== Number(req.admin.department_id)
+      ) {
+        return res.status(403).json({ message: "Access denied" });
+      }
+    } else if (req.user) {
+      const miNo = getMiNoByEmail(req.user.email);
+      if (!miNo) {
+        return res.status(403).json({
+          message: "No MI number mapped for this email. Contact admin.",
+        });
+      }
+
+      if (String(entry.mi_no).toLowerCase() !== String(miNo).toLowerCase()) {
+        return res.status(403).json({ message: "Certificate does not belong to this user" });
+      }
+    } else {
+      return res.status(401).json({ message: "Authentication required" });
     }
 
     const template = await templateModel.getTemplateById(entry.template_id);

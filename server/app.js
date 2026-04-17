@@ -5,6 +5,22 @@ const fs = require("fs");
 
 const app = express();
 
+const normalizePath = (value, fallback) => {
+  const raw = String(value || fallback || "").trim();
+  const withLeadingSlash = raw.startsWith("/") ? raw : `/${raw}`;
+  return withLeadingSlash.replace(/\/+$/, "") || "/";
+};
+
+const API_BASE_PATH = normalizePath(process.env.API_BASE_PATH, "/api");
+const API_AUTH_ROUTE = normalizePath(process.env.API_AUTH_ROUTE, "/auth");
+const API_TEMPLATES_ROUTE = normalizePath(process.env.API_TEMPLATES_ROUTE, "/templates");
+const API_BATCHES_ROUTE = normalizePath(process.env.API_BATCHES_ROUTE, "/batches");
+const API_CERTIFICATES_ROUTE = normalizePath(process.env.API_CERTIFICATES_ROUTE, "/certificates");
+const API_IDENTITY_MAPPING_ROUTE = normalizePath(
+  process.env.API_IDENTITY_MAPPING_ROUTE,
+  "/identity-mapping"
+);
+
 // ─── Middleware ───
 app.use(express.json({ limit: "10mb" }));
 app.use(cors());
@@ -27,11 +43,11 @@ const batchRoutes = require("./routes/batchRoutes");
 const certificateRoutes = require("./routes/certificateRoutes");
 const identityMappingRoutes = require("./routes/identityMappingRoutes");
 
-app.use("/api/auth", authRoutes);
-app.use("/api/templates", templateRoutes);
-app.use("/api/batches", batchRoutes);
-app.use("/api/certificates", certificateRoutes);
-app.use("/api/identity-mapping", identityMappingRoutes);
+app.use(`${API_BASE_PATH}${API_AUTH_ROUTE}`, authRoutes);
+app.use(`${API_BASE_PATH}${API_TEMPLATES_ROUTE}`, templateRoutes);
+app.use(`${API_BASE_PATH}${API_BATCHES_ROUTE}`, batchRoutes);
+app.use(`${API_BASE_PATH}${API_CERTIFICATES_ROUTE}`, certificateRoutes);
+app.use(`${API_BASE_PATH}${API_IDENTITY_MAPPING_ROUTE}`, identityMappingRoutes);
 
 // ─── Health check ───
 app.get("/", (req, res) => {

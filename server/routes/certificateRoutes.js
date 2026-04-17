@@ -2,6 +2,8 @@ const express = require("express");
 const router = express.Router();
 
 const authMiddleware = require("../middlewares/authMiddleware");
+const { verifyFirebaseToken } = require("../middlewares/firebaseAuthMiddleware");
+const certificateDownloadAccessMiddleware = require("../middlewares/certificateDownloadAccessMiddleware");
 const certificateController = require("../controllers/certificateController");
 
 // Release a batch (generate all PDFs)
@@ -13,8 +15,15 @@ router.get("/preview/:batch_id", authMiddleware, certificateController.previewCe
 // Preview a specific entry
 router.get("/preview/:batch_id/:entry_id", authMiddleware, certificateController.previewCertificate);
 
-// Download a single certificate (generated on demand, no file persistence)
-router.get("/download/:entry_id", authMiddleware, certificateController.downloadCertificate);
+// USER: List logged-in user's certificates by mapped MI number
+router.get("/me", verifyFirebaseToken, certificateController.getMyCertificates);
+
+// Download a single certificate for admin or logged-in user (generated on demand)
+router.get(
+	"/download/:entry_id",
+	certificateDownloadAccessMiddleware,
+	certificateController.downloadCertificate
+);
 
 // PUBLIC: Download by entry + MI number (for student portal)
 router.get(
