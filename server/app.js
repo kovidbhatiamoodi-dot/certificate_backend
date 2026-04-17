@@ -22,6 +22,7 @@ const API_IDENTITY_MAPPING_ROUTE = normalizePath(
 );
 
 // ─── Middleware ───
+
 app.use(express.json({ limit: "10mb" }));
 app.use(cors());
 
@@ -34,9 +35,13 @@ uploadDirs.forEach((dir) => {
 });
 
 // ─── Static files ───
+app.get("/api/health", (req, res) => {
+  res.status(200).json({ status: "healthy" });
+});
 app.use("/uploads", express.static("uploads"));
 
 // ─── Routes ───
+
 const authRoutes = require("./routes/authRoutes");
 const templateRoutes = require("./routes/templateRoutes");
 const batchRoutes = require("./routes/batchRoutes");
