@@ -2,7 +2,8 @@ const fs = require("fs");
 const path = require("path");
 
 const explicitPath = process.env.USER_MI_MAPPING_CSV_PATH;
-const fallbackPath = path.join(__dirname, "../../data/user_mi_mapping.csv");
+// Always read from user_backend/data (where admin portal uploads)
+const csvPath = path.join(__dirname, "../../../user_backend/data/user_mi_mapping.csv");
 
 const parseCsvLine = (line) => {
   const parts = line.split(",").map((value) => value.trim());
@@ -19,7 +20,7 @@ const getCsvPath = () => {
       : path.resolve(process.cwd(), explicitPath);
   }
 
-  return fallbackPath;
+  return csvPath;
 };
 
 const getMiNoByEmail = (email) => {
