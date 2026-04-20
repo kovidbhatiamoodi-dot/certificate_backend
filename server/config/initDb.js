@@ -98,9 +98,19 @@ const initDB = async () => {
         mi_no VARCHAR(30) NOT NULL,
         field_data JSON NOT NULL,
         certificate_url VARCHAR(255) NULL,
+        revoked_at TIMESTAMP NULL DEFAULT NULL,
         FOREIGN KEY (batch_id) REFERENCES certificate_batches(id) ON DELETE CASCADE
       )
     `);
+
+    const [batchEntryColumns] = await promiseDb.query("SHOW COLUMNS FROM batch_entries");
+    const batchEntryColumnSet = new Set(batchEntryColumns.map((col) => col.Field));
+
+    if (!batchEntryColumnSet.has("revoked_at")) {
+      await promiseDb.query(
+        "ALTER TABLE batch_entries ADD COLUMN revoked_at TIMESTAMP NULL DEFAULT NULL AFTER certificate_url"
+      );
+    }
 
     // ─── Seed departments ───
     await promiseDb.query(`

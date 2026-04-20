@@ -90,6 +90,22 @@ const updateEntryUrl = async (entry_id, certificate_url) => {
   );
 };
 
+const revokeEntryById = async (entry_id) => {
+  const [result] = await promiseDb.query(
+    "UPDATE batch_entries SET revoked_at = NOW() WHERE id = ?",
+    [entry_id]
+  );
+  return result;
+};
+
+const revokeBatchEntriesByBatchId = async (batch_id) => {
+  const [result] = await promiseDb.query(
+    "UPDATE batch_entries SET revoked_at = NOW() WHERE batch_id = ? AND revoked_at IS NULL",
+    [batch_id]
+  );
+  return result;
+};
+
 const deleteBatch = async (id) => {
   // batch_entries cascade-deleted via FK
   const [result] = await promiseDb.query(
@@ -109,7 +125,7 @@ const getReleasedCertsByMiNo = async (mi_no) => {
      JOIN certificate_batches cb ON be.batch_id = cb.id
      JOIN templates t ON cb.template_id = t.id
      JOIN departments d ON cb.department_id = d.id
-     WHERE be.mi_no = ? AND cb.status = 'RELEASED'
+     WHERE be.mi_no = ? AND cb.status = 'RELEASED' AND be.revoked_at IS NULL
      ORDER BY cb.released_at DESC`,
     [mi_no]
   );
@@ -126,6 +142,8 @@ module.exports = {
   getEntryWithBatch,
   updateBatchStatus,
   updateEntryUrl,
+  revokeEntryById,
+  revokeBatchEntriesByBatchId,
   deleteBatch,
   getReleasedCertsByMiNo,
 };

@@ -9,6 +9,9 @@ const certificateController = require("../controllers/certificateController");
 // Release a batch (generate all PDFs)
 router.post("/release/:id", authMiddleware, certificateController.releaseBatch);
 
+// Revoke all certificates in a released batch (admin only)
+router.patch("/revoke-batch/:id", authMiddleware, certificateController.revokeBatchCertificates);
+
 // Preview a certificate in a batch (first entry)
 router.get("/preview/:batch_id", authMiddleware, certificateController.previewCertificate);
 
@@ -24,6 +27,9 @@ router.get(
 	certificateDownloadAccessMiddleware,
 	certificateController.downloadCertificate
 );
+
+// Revoke a single released certificate entry (admin only)
+router.patch("/revoke/:entry_id", authMiddleware, certificateController.revokeCertificate);
 
 // PUBLIC: Download by entry + MI number (for student portal)
 router.get(

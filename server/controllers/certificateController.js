@@ -115,6 +115,10 @@ exports.downloadCertificate = async (req, res) => {
       return res.status(400).json({ message: "Batch is not released yet" });
     }
 
+    if (entry.revoked_at) {
+      return res.status(404).json({ message: "Certificate is no longer available" });
+    }
+
     if (req.admin) {
       if (
         req.admin.role !== "superadmin" &&
@@ -175,6 +179,10 @@ exports.downloadCertificatePublic = async (req, res) => {
       return res.status(400).json({ message: "Batch is not released yet" });
     }
 
+    if (entry.revoked_at) {
+      return res.status(404).json({ message: "Certificate is no longer available" });
+    }
+
     if (String(entry.mi_no).toLowerCase() !== String(mi_no).toLowerCase()) {
       return res.status(403).json({ message: "Certificate does not belong to this MI number" });
     }
@@ -199,6 +207,71 @@ exports.downloadCertificatePublic = async (req, res) => {
   } catch (err) {
     console.error("Public download certificate error:", err);
     return res.status(500).json({ message: "Failed to generate certificate" });
+  }
+};
+
+// ─── REVOKE A SINGLE RELEASED CERTIFICATE ENTRY ───
+exports.revokeCertificate = async (req, res) => {
+  try {
+    const { entry_id } = req.params;
+
+    const entry = await batchModel.getEntryWithBatch(entry_id);
+    if (!entry) {
+      return res.status(404).json({ message: "Certificate entry not found" });
+    }
+
+    if (entry.status !== "RELEASED") {
+      return res.status(400).json({ message: "Certificate can only be revoked after release" });
+    }
+
+    if (entry.revoked_at) {
+      return res.status(400).json({ message: "Certificate is already revoked" });
+    }
+
+    if (req.admin.role !== "superadmin" && Number(entry.department_id) !== Number(req.admin.department_id)) {
+      return res.status(403).json({ message: "Access denied" });
+    }
+
+    await batchModel.revokeEntryById(entry_id);
+
+    return res.json({
+      message: "Certificate revoked successfully",
+      entry_id: Number(entry_id),
+    });
+  } catch (err) {
+    console.error("Revoke certificate error:", err);
+    return res.status(500).json({ message: "Failed to revoke certificate" });
+  }
+};
+
+// ─── REVOKE ALL CERTIFICATES IN A RELEASED BATCH ───
+exports.revokeBatchCertificates = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const batch = await batchModel.getBatchById(id);
+    if (!batch) {
+      return res.status(404).json({ message: "Batch not found" });
+    }
+
+    if (req.admin.role !== "superadmin" && Number(batch.department_id) !== Number(req.admin.department_id)) {
+      return res.status(403).json({ message: "Access denied" });
+    }
+
+    if (batch.status !== "RELEASED") {
+      return res.status(400).json({ message: "Only released batch certificates can be revoked" });
+    }
+
+    const result = await batchModel.revokeBatchEntriesByBatchId(id);
+
+    return res.json({
+      message: "Batch certificates revoked successfully",
+      batch_id: Number(id),
+      revokedCount: result.affectedRows || 0,
+    });
+  } catch (err) {
+    console.error("Revoke batch certificates error:", err);
+    return res.status(500).json({ message: "Failed to revoke batch certificates" });
   }
 };
 
