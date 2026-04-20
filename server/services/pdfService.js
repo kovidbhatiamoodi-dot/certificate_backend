@@ -81,12 +81,13 @@ const generateCertificatePDF = (template, fieldData, outputPath) => {
       const value = fieldData[field.key] || "";
       if (!value) return;
 
-      const x = field.x;
-      const y = field.y;
+      const x = field.centerX ?? field.x;
+      const y = field.centerY ?? field.y;
       const fontSize = field.fontSize || 24;
       const fontColor = field.fontColor || "#000000";
-      const originX = field.originX || "left";
-      const originY = field.originY || "top";
+      // Use center anchoring for certificate text placement to avoid legacy top-left drift.
+      const originX = "center";
+      const originY = "center";
 
       doc.fontSize(fontSize).fillColor(fontColor).strokeColor(fontColor).lineWidth(0.35);
 
@@ -141,12 +142,13 @@ const generateCertificatePDFBuffer = (template, fieldData) => {
       const value = fieldData[field.key] || "";
       if (!value) return;
 
-      const x = field.x;
-      const y = field.y;
+      const x = field.centerX ?? field.x;
+      const y = field.centerY ?? field.y;
       const fontSize = field.fontSize || 24;
       const fontColor = field.fontColor || "#000000";
-      const originX = field.originX || "left";
-      const originY = field.originY || "top";
+      // Use center anchoring for certificate text placement to avoid legacy top-left drift.
+      const originX = "center";
+      const originY = "center";
 
       doc.fontSize(fontSize).fillColor(fontColor).strokeColor(fontColor).lineWidth(0.35);
 
