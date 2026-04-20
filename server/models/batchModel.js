@@ -106,6 +106,14 @@ const revokeBatchEntriesByBatchId = async (batch_id) => {
   return result;
 };
 
+const countUnrevokedEntriesByBatchId = async (batch_id) => {
+  const [rows] = await promiseDb.query(
+    "SELECT COUNT(*) AS total FROM batch_entries WHERE batch_id = ? AND revoked_at IS NULL",
+    [batch_id]
+  );
+  return rows[0]?.total || 0;
+};
+
 const deleteBatch = async (id) => {
   // batch_entries cascade-deleted via FK
   const [result] = await promiseDb.query(
@@ -144,6 +152,7 @@ module.exports = {
   updateEntryUrl,
   revokeEntryById,
   revokeBatchEntriesByBatchId,
+  countUnrevokedEntriesByBatchId,
   deleteBatch,
   getReleasedCertsByMiNo,
 };

@@ -15,6 +15,23 @@ const getTemplateCanvasConfig = (template) => {
   };
 };
 
+const getAnchoredTextPosition = (doc, text, x, y, originX, originY, fontSize) => {
+  const textWidth = doc.widthOfString(text);
+  const textHeight = Number(fontSize) || doc.currentLineHeight();
+  const numericX = Number(x) || 0;
+  const numericY = Number(y) || 0;
+
+  let anchoredX = numericX;
+  if (originX === "center") anchoredX = numericX - textWidth / 2;
+  if (originX === "right") anchoredX = numericX - textWidth;
+
+  let anchoredY = numericY;
+  if (originY === "center") anchoredY = numericY - textHeight / 2;
+  if (originY === "bottom") anchoredY = numericY - textHeight;
+
+  return { x: anchoredX, y: anchoredY };
+};
+
 /**
  * Generate a certificate PDF.
  * @param {Object} template - { background_url, fields_json: { canvasWidth, canvasHeight, fields: [...] } }
@@ -68,29 +85,19 @@ const generateCertificatePDF = (template, fieldData, outputPath) => {
       const y = field.y;
       const fontSize = field.fontSize || 24;
       const fontColor = field.fontColor || "#000000";
+      const originX = field.originX || "left";
+      const originY = field.originY || "top";
 
       doc.fontSize(fontSize).fillColor(fontColor).strokeColor(fontColor).lineWidth(0.35);
 
       const text = String(value);
-      const isCenterAnchored =
-        (field.originX || "center") === "center" &&
-        (field.originY || "center") === "center";
+      const anchored = getAnchoredTextPosition(doc, text, x, y, originX, originY, fontSize);
 
-      if (isCenterAnchored) {
-        const textWidth = doc.widthOfString(text);
-        const textHeight = doc.currentLineHeight();
-        doc.text(text, x - textWidth / 2, y - textHeight / 2, {
-          lineBreak: false,
-          fill: true,
-          stroke: true,
-        });
-      } else {
-        doc.text(text, x, y, {
-          lineBreak: false,
-          fill: true,
-          stroke: true,
-        });
-      }
+      doc.text(text, anchored.x, anchored.y, {
+        lineBreak: false,
+        fill: true,
+        stroke: true,
+      });
     });
 
     doc.end();
@@ -138,29 +145,19 @@ const generateCertificatePDFBuffer = (template, fieldData) => {
       const y = field.y;
       const fontSize = field.fontSize || 24;
       const fontColor = field.fontColor || "#000000";
+      const originX = field.originX || "left";
+      const originY = field.originY || "top";
 
       doc.fontSize(fontSize).fillColor(fontColor).strokeColor(fontColor).lineWidth(0.35);
 
       const text = String(value);
-      const isCenterAnchored =
-        (field.originX || "center") === "center" &&
-        (field.originY || "center") === "center";
+      const anchored = getAnchoredTextPosition(doc, text, x, y, originX, originY, fontSize);
 
-      if (isCenterAnchored) {
-        const textWidth = doc.widthOfString(text);
-        const textHeight = doc.currentLineHeight();
-        doc.text(text, x - textWidth / 2, y - textHeight / 2, {
-          lineBreak: false,
-          fill: true,
-          stroke: true,
-        });
-      } else {
-        doc.text(text, x, y, {
-          lineBreak: false,
-          fill: true,
-          stroke: true,
-        });
-      }
+      doc.text(text, anchored.x, anchored.y, {
+        lineBreak: false,
+        fill: true,
+        stroke: true,
+      });
     });
 
     doc.end();

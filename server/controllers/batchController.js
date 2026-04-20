@@ -143,7 +143,10 @@ exports.deleteBatch = async (req, res) => {
     }
 
     if (batch.status === "RELEASED") {
-      return res.status(400).json({ message: "Cannot delete a released batch" });
+      const activeEntryCount = await batchModel.countUnrevokedEntriesByBatchId(batch.id);
+      if (activeEntryCount > 0) {
+        return res.status(400).json({ message: "Revoke all certificates in this batch before deleting it" });
+      }
     }
 
     await batchModel.deleteBatch(batch.id);
