@@ -15,8 +15,10 @@ exports.uploadIdentityMapping = async (req, res) => {
     const result = replaceCentralMapping(rows);
 
     return res.json({
-      message: "Central identity mapping updated successfully",
+      message: result.message || "Central identity mapping updated successfully",
       total: result.total,
+      skippedCount: result.skippedRows.length,
+      skippedRows: result.skippedRows,
     });
   } catch (err) {
     return res.status(400).json({ message: err.message || "Failed to update mapping" });

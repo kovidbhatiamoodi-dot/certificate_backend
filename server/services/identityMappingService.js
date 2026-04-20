@@ -6,40 +6,66 @@ const CENTRAL_MAPPING_PATH = path.join(__dirname, "../../../user_backend/data/us
 const normalizeEmail = (value) => String(value || "").trim().toLowerCase();
 const normalizeMiNo = (value) => String(value || "").trim().toUpperCase();
 
-const ensureOneToOneMapping = (rows) => {
+const getMiNo = (row) => row.mi_no || row.mi_no_ || row.mino || row.miNo;
+
+const collectValidMappings = (rows) => {
   const emailToMi = new Map();
   const miToEmail = new Map();
+  const skippedRows = [];
 
-  for (const row of rows) {
+  rows.forEach((row, index) => {
+    const rowNumber = index + 2;
     const email = normalizeEmail(row.email);
-    const miNo = normalizeMiNo(row.mi_no || row.mi_no_ || row.mino || row.miNo);
+    const miNo = normalizeMiNo(getMiNo(row));
+    const rowSnapshot = { ...row, email, mi_no: miNo };
 
     if (!email || !miNo) {
-      continue;
+      skippedRows.push({
+        rowNumber,
+        reason: "Missing email or mi_no",
+        row: rowSnapshot,
+      });
+      return;
     }
 
-    const existingMi = emailToMi.get(email);
-    if (existingMi && existingMi !== miNo) {
-      throw new Error(`Conflict: email '${email}' maps to multiple MI numbers`);
+    const existingMiForEmail = emailToMi.get(email);
+    if (existingMiForEmail && existingMiForEmail !== miNo) {
+      skippedRows.push({
+        rowNumber,
+        reason: `Email '${email}' already mapped to MI number '${existingMiForEmail}'`,
+        row: rowSnapshot,
+      });
+      return;
     }
+
+    const existingEmailForMi = miToEmail.get(miNo);
+    if (existingEmailForMi && existingEmailForMi !== email) {
+      skippedRows.push({
+        rowNumber,
+        reason: `MI number '${miNo}' already mapped to email '${existingEmailForMi}'`,
+        row: rowSnapshot,
+      });
+      return;
+    }
+
     emailToMi.set(email, miNo);
-
-    const existingEmail = miToEmail.get(miNo);
-    if (existingEmail && existingEmail !== email) {
-      throw new Error(`Conflict: MI number '${miNo}' maps to multiple emails`);
-    }
     miToEmail.set(miNo, email);
-  }
+  });
 
-  if (emailToMi.size === 0) {
-    throw new Error("No valid rows found. CSV must contain email and mi_no values");
-  }
-
-  return emailToMi;
+  return { emailToMi, skippedRows };
 };
 
 const replaceCentralMapping = (rows) => {
-  const emailToMi = ensureOneToOneMapping(rows);
+  const { emailToMi, skippedRows } = collectValidMappings(rows);
+
+  if (emailToMi.size === 0) {
+    return {
+      total: 0,
+      skippedRows,
+      filePath: CENTRAL_MAPPING_PATH,
+      message: "No valid rows found. CSV must contain email and mi_no values",
+    };
+  }
 
   const dir = path.dirname(CENTRAL_MAPPING_PATH);
   if (!fs.existsSync(dir)) {
@@ -55,6 +81,7 @@ const replaceCentralMapping = (rows) => {
 
   return {
     total: emailToMi.size,
+    skippedRows,
     filePath: CENTRAL_MAPPING_PATH,
   };
 };
