@@ -1,50 +1,43 @@
-const fs = require("fs");
-const path = require("path");
-
-const CENTRAL_MAPPING_PATH = path.join(__dirname, "../../../user_backend/data/user_mi_mapping.csv");
+const db = require("../config/db");
+const promiseDb = db.promise();
 
 const normalizeEmail = (value) => String(value || "").trim().toLowerCase();
 const normalizeMiNo = (value) => String(value || "").trim().toUpperCase();
 
-const getMiNo = (row) => row.mi_no || row.mi_no_ || row.mino || row.miNo;
+const normalizeKey = (value) => String(value || "").toLowerCase().replace(/[^a-z0-9]/g, "");
 
-const collectValidMappings = (rows) => {
+const pickByKeyAlias = (row, aliases) => {
+  if (!row || typeof row !== "object") {
+    return "";
+  }
+
+  const aliasSet = new Set(aliases.map(normalizeKey));
+  for (const [key, value] of Object.entries(row)) {
+    if (aliasSet.has(normalizeKey(key))) {
+      return value;
+    }
+  }
+
+  return "";
+};
+
+const getEmail = (row) =>
+  pickByKeyAlias(row, ["email", "email_id", "mail", "mail_id", "emailid"]);
+
+const getMiNo = (row) =>
+  pickByKeyAlias(row, ["mi_no", "mi no", "mino", "miNo", "mi_number", "mi id", "mi_id"]);
+
+const loadExistingMappings = async () => {
   const emailToMi = new Map();
   const miToEmail = new Map();
-  const skippedRows = [];
 
-  rows.forEach((row, index) => {
-    const rowNumber = index + 2;
+  const [rows] = await promiseDb.query("SELECT email, mi_no FROM identity_mappings");
+
+  rows.forEach((row) => {
     const email = normalizeEmail(row.email);
-    const miNo = normalizeMiNo(getMiNo(row));
-    const rowSnapshot = { ...row, email, mi_no: miNo };
+    const miNo = normalizeMiNo(row.mi_no);
 
     if (!email || !miNo) {
-      skippedRows.push({
-        rowNumber,
-        reason: "Missing email or mi_no",
-        row: rowSnapshot,
-      });
-      return;
-    }
-
-    const existingMiForEmail = emailToMi.get(email);
-    if (existingMiForEmail && existingMiForEmail !== miNo) {
-      skippedRows.push({
-        rowNumber,
-        reason: `Email '${email}' already mapped to MI number '${existingMiForEmail}'`,
-        row: rowSnapshot,
-      });
-      return;
-    }
-
-    const existingEmailForMi = miToEmail.get(miNo);
-    if (existingEmailForMi && existingEmailForMi !== email) {
-      skippedRows.push({
-        rowNumber,
-        reason: `MI number '${miNo}' already mapped to email '${existingEmailForMi}'`,
-        row: rowSnapshot,
-      });
       return;
     }
 
@@ -52,37 +45,125 @@ const collectValidMappings = (rows) => {
     miToEmail.set(miNo, email);
   });
 
-  return { emailToMi, skippedRows };
+  return { emailToMi, miToEmail };
 };
 
-const replaceCentralMapping = (rows) => {
-  const { emailToMi, skippedRows } = collectValidMappings(rows);
+const collectValidMappings = async (rows) => {
+  const { emailToMi, miToEmail } = await loadExistingMappings();
+  const skippedRows = [];
+  const skippedReasonSummary = {};
+  const newMappings = [];
+  let addedCount = 0;
+  let updatedCount = 0;
+  let unchangedCount = 0;
+
+  const pushSkipped = (rowNumber, reason, rowSnapshot) => {
+    skippedRows.push({
+      rowNumber,
+      reason,
+      row: rowSnapshot,
+    });
+    skippedReasonSummary[reason] = (skippedReasonSummary[reason] || 0) + 1;
+  };
+
+  rows.forEach((row, index) => {
+    const rowNumber = index + 2;
+    const email = normalizeEmail(getEmail(row));
+    const miNo = normalizeMiNo(getMiNo(row));
+    const rowSnapshot = { ...row, email, mi_no: miNo };
+
+    if (!email || !miNo) {
+      pushSkipped(rowNumber, "Missing email or mi_no", rowSnapshot);
+      return;
+    }
+
+    const existingMiForEmail = emailToMi.get(email);
+    if (existingMiForEmail && existingMiForEmail === miNo) {
+      unchangedCount++;
+      return;
+    }
+
+    const existingEmailForMi = miToEmail.get(miNo);
+
+    // Existing email should never be remapped by upload; skip and report.
+    if (existingMiForEmail && existingMiForEmail !== miNo) {
+      pushSkipped(
+        rowNumber,
+        `Email '${email}' is already mapped to MI number '${existingMiForEmail}'`,
+        rowSnapshot
+      );
+      return;
+    }
+
+    if (existingEmailForMi && existingEmailForMi !== email) {
+      pushSkipped(
+        rowNumber,
+        `MI number '${miNo}' already mapped to email '${existingEmailForMi}'`,
+        rowSnapshot
+      );
+      return;
+    }
+
+    emailToMi.set(email, miNo);
+    miToEmail.set(miNo, email);
+    newMappings.push({ email, miNo });
+    addedCount++;
+  });
+
+  return {
+    emailToMi,
+    newMappings,
+    skippedRows,
+    skippedReasonSummary,
+    addedCount,
+    updatedCount,
+    unchangedCount,
+  };
+};
+
+const replaceCentralMapping = async (rows) => {
+  const {
+    emailToMi,
+    newMappings,
+    skippedRows,
+    skippedReasonSummary,
+    addedCount,
+    updatedCount,
+    unchangedCount,
+  } = await collectValidMappings(rows);
 
   if (emailToMi.size === 0) {
     return {
       total: 0,
+      addedCount,
+      updatedCount,
+      unchangedCount,
       skippedRows,
-      filePath: CENTRAL_MAPPING_PATH,
+      skippedReasonSummary,
+      storage: "database",
       message: "No valid rows found. CSV must contain email and mi_no values",
     };
   }
 
-  const dir = path.dirname(CENTRAL_MAPPING_PATH);
-  if (!fs.existsSync(dir)) {
-    fs.mkdirSync(dir, { recursive: true });
+  if (newMappings.length > 0) {
+    for (const mapping of newMappings) {
+      await promiseDb.query(
+        "INSERT INTO identity_mappings (email, mi_no) VALUES (?, ?)",
+        [mapping.email, mapping.miNo]
+      );
+    }
   }
 
-  const lines = ["email,miNo"];
-  for (const [email, miNo] of emailToMi.entries()) {
-    lines.push(`${email},${miNo}`);
-  }
-
-  fs.writeFileSync(CENTRAL_MAPPING_PATH, `${lines.join("\n")}\n`, "utf8");
+  const [totalRows] = await promiseDb.query("SELECT COUNT(*) AS total FROM identity_mappings");
 
   return {
-    total: emailToMi.size,
+    total: Number(totalRows[0]?.total || 0),
+    addedCount,
+    updatedCount,
+    unchangedCount,
     skippedRows,
-    filePath: CENTRAL_MAPPING_PATH,
+    skippedReasonSummary,
+    storage: "database",
   };
 };
 

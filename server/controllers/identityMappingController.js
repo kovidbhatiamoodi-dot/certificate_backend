@@ -12,7 +12,7 @@ exports.uploadIdentityMapping = async (req, res) => {
     }
 
     const rows = await parseCSV(req.file.path);
-    const result = replaceCentralMapping(rows);
+    const result = await replaceCentralMapping(rows);
 
     return res.json({
       message: result.message || "Central identity mapping updated successfully",

@@ -112,6 +112,18 @@ const initDB = async () => {
       );
     }
 
+    // ─── Identity Mapping (email <-> MI) ───
+    await promiseDb.query(`
+      CREATE TABLE IF NOT EXISTS identity_mappings (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        email VARCHAR(255) NOT NULL,
+        mi_no VARCHAR(50) NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE KEY uq_identity_mappings_email (email),
+        UNIQUE KEY uq_identity_mappings_mi_no (mi_no)
+      )
+    `);
+
     // ─── Seed departments ───
     await promiseDb.query(`
       INSERT IGNORE INTO departments (name) VALUES 

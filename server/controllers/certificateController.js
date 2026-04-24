@@ -71,7 +71,7 @@ exports.releaseBatch = async (req, res) => {
 exports.getMyCertificates = async (req, res) => {
   try {
     const email = req.user?.email;
-    const miNo = getMiNoByEmail(email);
+    const miNo = await getMiNoByEmail(email);
 
     if (!miNo) {
       return res.status(403).json({
@@ -127,7 +127,7 @@ exports.downloadCertificate = async (req, res) => {
         return res.status(403).json({ message: "Access denied" });
       }
     } else if (req.user) {
-      const miNo = getMiNoByEmail(req.user.email);
+      const miNo = await getMiNoByEmail(req.user.email);
       if (!miNo) {
         return res.status(403).json({
           message: "No MI number mapped for this email. Contact admin.",
