@@ -1,5 +1,9 @@
 const db = require("../config/db");
 const promiseDb = db.promise();
+const fs = require("fs");
+const path = require("path");
+
+const SKIPPED_REPORTS_DIR = path.join(__dirname, "../../uploads/temp");
 
 const normalizeEmail = (value) => String(value || "").trim().toLowerCase();
 const normalizeMiNo = (value) => String(value || "").trim().toUpperCase();
@@ -26,6 +30,51 @@ const getEmail = (row) =>
 
 const getMiNo = (row) =>
   pickByKeyAlias(row, ["mi_no", "mi no", "mino", "miNo", "mi_number", "mi id", "mi_id"]);
+
+const bumpReason = (summary, reason) => {
+  summary[reason] = (summary[reason] || 0) + 1;
+};
+
+const csvEscape = (value) => {
+  const stringValue = String(value ?? "");
+  if (/[",\n]/.test(stringValue)) {
+    return `"${stringValue.replace(/"/g, '""')}"`;
+  }
+  return stringValue;
+};
+
+const writeSkippedRowsReport = (skippedRows) => {
+  if (!skippedRows.length) {
+    return null;
+  }
+
+  if (!fs.existsSync(SKIPPED_REPORTS_DIR)) {
+    fs.mkdirSync(SKIPPED_REPORTS_DIR, { recursive: true });
+  }
+
+  const fileName = `identity_mapping_skipped_${Date.now()}.csv`;
+  const filePath = path.join(SKIPPED_REPORTS_DIR, fileName);
+  const lines = ["row_number,reason,email,mi_no,row_json"];
+
+  for (const skipped of skippedRows) {
+    lines.push(
+      [
+        csvEscape(skipped.rowNumber),
+        csvEscape(skipped.reason),
+        csvEscape(skipped.row?.email || ""),
+        csvEscape(skipped.row?.mi_no || ""),
+        csvEscape(JSON.stringify(skipped.row || {})),
+      ].join(",")
+    );
+  }
+
+  fs.writeFileSync(filePath, `${lines.join("\n")}\n`, "utf8");
+  return {
+    filePath,
+    fileName,
+    downloadUrl: `/uploads/temp/${fileName}`,
+  };
+};
 
 const loadExistingMappings = async () => {
   const emailToMi = new Map();
@@ -79,7 +128,8 @@ const collectValidMappings = async (rows) => {
 
     const existingMiForEmail = emailToMi.get(email);
     if (existingMiForEmail && existingMiForEmail === miNo) {
-      unchangedCount++;
+      const reason = `Duplicate mapping: email '${email}' already mapped to MI number '${miNo}'`;
+      pushSkipped(rowNumber, reason, rowSnapshot);
       return;
     }
 
@@ -106,7 +156,7 @@ const collectValidMappings = async (rows) => {
 
     emailToMi.set(email, miNo);
     miToEmail.set(miNo, email);
-    newMappings.push({ email, miNo });
+    newMappings.push({ email, miNo, rowNumber, rowSnapshot });
     addedCount++;
   });
 
@@ -147,14 +197,30 @@ const replaceCentralMapping = async (rows) => {
 
   if (newMappings.length > 0) {
     for (const mapping of newMappings) {
-      await promiseDb.query(
-        "INSERT INTO identity_mappings (email, mi_no) VALUES (?, ?)",
-        [mapping.email, mapping.miNo]
-      );
+      try {
+        await promiseDb.query(
+          "INSERT INTO identity_mappings (email, mi_no) VALUES (?, ?)",
+          [mapping.email, mapping.miNo]
+        );
+      } catch (err) {
+        addedCount--;
+        const reason =
+          err && err.code === "ER_DUP_ENTRY"
+            ? `Duplicate mapping already exists in database for email '${mapping.email}' or MI number '${mapping.miNo}'`
+            : `Insert failed: ${err.message}`;
+
+        skippedRows.push({
+          rowNumber: mapping.rowNumber,
+          reason,
+          row: mapping.rowSnapshot,
+        });
+        bumpReason(skippedReasonSummary, reason);
+      }
     }
   }
 
   const [totalRows] = await promiseDb.query("SELECT COUNT(*) AS total FROM identity_mappings");
+  const skippedReport = writeSkippedRowsReport(skippedRows);
 
   return {
     total: Number(totalRows[0]?.total || 0),
@@ -163,6 +229,7 @@ const replaceCentralMapping = async (rows) => {
     unchangedCount,
     skippedRows,
     skippedReasonSummary,
+    skippedReport,
     storage: "database",
   };
 };

@@ -17,7 +17,12 @@ exports.uploadIdentityMapping = async (req, res) => {
     return res.json({
       message: result.message || "Central identity mapping updated successfully",
       total: result.total,
+      addedCount: result.addedCount,
+      updatedCount: result.updatedCount,
+      unchangedCount: result.unchangedCount,
       skippedCount: result.skippedRows.length,
+      skippedReasonSummary: result.skippedReasonSummary,
+      skippedReport: result.skippedReport,
       skippedRows: result.skippedRows,
     });
   } catch (err) {
