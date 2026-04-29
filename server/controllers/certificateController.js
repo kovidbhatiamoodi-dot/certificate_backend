@@ -325,6 +325,59 @@ exports.downloadBatchCertificates = async (req, res) => {
   }
 };
 
+// ─── DOWNLOAD ALL CERTIFICATES IN A DRAFT BATCH AS ONE PDF ───
+exports.downloadDraftBatchCertificates = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const batch = await batchModel.getBatchById(id);
+    if (!batch) {
+      return res.status(404).json({ message: "Batch not found" });
+    }
+
+    if (req.admin.role !== "superadmin" && Number(batch.department_id) !== Number(req.admin.department_id)) {
+      return res.status(403).json({ message: "Access denied" });
+    }
+
+    if (batch.status === "RELEASED") {
+      return res.status(400).json({ message: "Use the released batch download instead" });
+    }
+
+    const entries = await batchModel.getBatchEntries(id);
+    const downloadableEntries = entries.filter((entry) => !entry.revoked_at);
+
+    if (downloadableEntries.length === 0) {
+      return res.status(400).json({ message: "No available certificates in this batch" });
+    }
+
+    const template = await templateModel.getTemplateById(batch.template_id);
+    if (!template) {
+      return res.status(404).json({ message: "Template not found" });
+    }
+
+    const mergedPdf = await PDFDocument.create();
+
+    for (const entry of downloadableEntries) {
+      const fieldData = parseFieldData(entry.field_data);
+      const pdfBuffer = await generateCertificatePDFBuffer(template, fieldData);
+      const sourcePdf = await PDFDocument.load(pdfBuffer);
+      const copiedPages = await mergedPdf.copyPages(sourcePdf, sourcePdf.getPageIndices());
+      copiedPages.forEach((page) => mergedPdf.addPage(page));
+    }
+
+    const pdfBytes = await mergedPdf.save();
+    const safeBatchName = String(batch.name || "batch").replace(/[^a-zA-Z0-9_-]/g, "_");
+    const fileName = `batch_${safeBatchName}_${batch.id}_draft_certificates.pdf`;
+
+    res.setHeader("Content-Type", "application/pdf");
+    res.setHeader("Content-Disposition", `attachment; filename=\"${fileName}\"`);
+    return res.send(Buffer.from(pdfBytes));
+  } catch (err) {
+    console.error("Download draft batch certificates error:", err);
+    return res.status(500).json({ message: "Failed to generate batch PDF" });
+  }
+};
+
 // ─── PREVIEW (render one certificate preview data) ───
 exports.previewCertificate = async (req, res) => {
   try {
