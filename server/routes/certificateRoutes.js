@@ -12,6 +12,9 @@ router.post("/release/:id", authMiddleware, certificateController.releaseBatch);
 // Revoke all certificates in a released batch (admin only)
 router.patch("/revoke-batch/:id", authMiddleware, certificateController.revokeBatchCertificates);
 
+// Download all certificates in a released batch as one PDF (admin only)
+router.get("/download-batch/:id", authMiddleware, certificateController.downloadBatchCertificates);
+
 // Preview a certificate in a batch (first entry)
 router.get("/preview/:batch_id", authMiddleware, certificateController.previewCertificate);
 

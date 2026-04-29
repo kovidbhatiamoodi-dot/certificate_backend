@@ -2,6 +2,7 @@ const batchModel = require("../models/batchModel");
 const templateModel = require("../models/templateModel");
 const { generateCertificatePDFBuffer } = require("../services/pdfService");
 const { getMiNoByEmail } = require("../services/userMiMappingService");
+const { PDFDocument } = require("pdf-lib");
 
 const normalizePath = (value, fallback) => {
   const raw = String(value || fallback || "").trim();
@@ -12,6 +13,8 @@ const normalizePath = (value, fallback) => {
 const API_BASE_PATH = normalizePath(process.env.API_BASE_PATH, "/api");
 const API_CERTIFICATES_ROUTE = normalizePath(process.env.API_CERTIFICATES_ROUTE, "/certificates");
 const CERTIFICATE_DOWNLOAD_BASE = `${API_BASE_PATH}${API_CERTIFICATES_ROUTE}/download`;
+
+const parseFieldData = (value) => (typeof value === "string" ? JSON.parse(value) : value);
 
 // ─── RELEASE BATCH (no local file storage; use on-demand generation) ───
 exports.releaseBatch = async (req, res) => {
@@ -146,10 +149,7 @@ exports.downloadCertificate = async (req, res) => {
       return res.status(404).json({ message: "Template not found" });
     }
 
-    const fieldData =
-      typeof entry.field_data === "string"
-        ? JSON.parse(entry.field_data)
-        : entry.field_data;
+    const fieldData = parseFieldData(entry.field_data);
 
     const pdfBuffer = await generateCertificatePDFBuffer(template, fieldData);
     const safeMiNo = String(entry.mi_no || "certificate").replace(/[^a-zA-Z0-9_-]/g, "_");
@@ -192,10 +192,7 @@ exports.downloadCertificatePublic = async (req, res) => {
       return res.status(404).json({ message: "Template not found" });
     }
 
-    const fieldData =
-      typeof entry.field_data === "string"
-        ? JSON.parse(entry.field_data)
-        : entry.field_data;
+    const fieldData = parseFieldData(entry.field_data);
 
     const pdfBuffer = await generateCertificatePDFBuffer(template, fieldData);
     const safeMiNo = String(entry.mi_no || "certificate").replace(/[^a-zA-Z0-9_-]/g, "_");
@@ -272,6 +269,59 @@ exports.revokeBatchCertificates = async (req, res) => {
   } catch (err) {
     console.error("Revoke batch certificates error:", err);
     return res.status(500).json({ message: "Failed to revoke batch certificates" });
+  }
+};
+
+// ─── DOWNLOAD ALL CERTIFICATES IN A BATCH AS ONE PDF ───
+exports.downloadBatchCertificates = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const batch = await batchModel.getBatchById(id);
+    if (!batch) {
+      return res.status(404).json({ message: "Batch not found" });
+    }
+
+    if (req.admin.role !== "superadmin" && Number(batch.department_id) !== Number(req.admin.department_id)) {
+      return res.status(403).json({ message: "Access denied" });
+    }
+
+    if (batch.status !== "RELEASED") {
+      return res.status(400).json({ message: "Only released batches can be downloaded" });
+    }
+
+    const entries = await batchModel.getBatchEntries(id);
+    const downloadableEntries = entries.filter((entry) => !entry.revoked_at);
+
+    if (downloadableEntries.length === 0) {
+      return res.status(400).json({ message: "No available certificates in this batch" });
+    }
+
+    const template = await templateModel.getTemplateById(batch.template_id);
+    if (!template) {
+      return res.status(404).json({ message: "Template not found" });
+    }
+
+    const mergedPdf = await PDFDocument.create();
+
+    for (const entry of downloadableEntries) {
+      const fieldData = parseFieldData(entry.field_data);
+      const pdfBuffer = await generateCertificatePDFBuffer(template, fieldData);
+      const sourcePdf = await PDFDocument.load(pdfBuffer);
+      const copiedPages = await mergedPdf.copyPages(sourcePdf, sourcePdf.getPageIndices());
+      copiedPages.forEach((page) => mergedPdf.addPage(page));
+    }
+
+    const pdfBytes = await mergedPdf.save();
+    const safeBatchName = String(batch.name || "batch").replace(/[^a-zA-Z0-9_-]/g, "_");
+    const fileName = `batch_${safeBatchName}_${batch.id}_certificates.pdf`;
+
+    res.setHeader("Content-Type", "application/pdf");
+    res.setHeader("Content-Disposition", `attachment; filename=\"${fileName}\"`);
+    return res.send(Buffer.from(pdfBytes));
+  } catch (err) {
+    console.error("Download batch certificates error:", err);
+    return res.status(500).json({ message: "Failed to generate batch PDF" });
   }
 };
 
