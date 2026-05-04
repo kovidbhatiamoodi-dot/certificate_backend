@@ -89,7 +89,7 @@ const generateCertificatePDF = (template, fieldData, outputPath) => {
       const originX = "center";
       const originY = "center";
 
-      doc.fontSize(fontSize).fillColor(fontColor).strokeColor(fontColor).lineWidth(0.35);
+      doc.font("Helvetica-Bold").fontSize(fontSize).fillColor(fontColor).strokeColor(fontColor).lineWidth(0.35);
 
       const text = String(value);
       const anchored = getAnchoredTextPosition(doc, text, x, y, originX, originY, fontSize);
@@ -150,7 +150,7 @@ const generateCertificatePDFBuffer = (template, fieldData) => {
       const originX = "center";
       const originY = "center";
 
-      doc.fontSize(fontSize).fillColor(fontColor).strokeColor(fontColor).lineWidth(0.35);
+      doc.font("Helvetica-Bold").fontSize(fontSize).fillColor(fontColor).strokeColor(fontColor).lineWidth(0.35);
 
       const text = String(value);
       const anchored = getAnchoredTextPosition(doc, text, x, y, originX, originY, fontSize);
