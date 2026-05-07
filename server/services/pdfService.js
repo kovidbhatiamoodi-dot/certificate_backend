@@ -104,7 +104,7 @@ const generateCertificatePDF = (template, fieldData, outputPath) => {
       doc.text(text, anchored.x, anchored.y, {
         lineBreak: false,
         fill: true,
-        stroke: true,
+        // stroke: true, // Disabling stroke, it can make fonts look weird
       });
     });
 
@@ -168,7 +168,7 @@ const generateCertificatePDFBuffer = (template, fieldData) => {
       doc.text(text, anchored.x, anchored.y, {
         lineBreak: false,
         fill: true,
-        stroke: true,
+        // stroke: true, // Disabling stroke, it can make fonts look weird
       });
     });
 
