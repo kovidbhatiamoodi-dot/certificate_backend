@@ -2,9 +2,9 @@ const PDFDocument = require("pdfkit");
 const fs = require("fs");
 const path = require("path");
 
-const RUBIK_REGULAR_FONT = require.resolve("@fontsource/rubik/files/rubik-latin-400-normal.woff2");
-const RUBIK_MEDIUM_FONT = require.resolve("@fontsource/rubik/files/rubik-latin-500-normal.woff2");
-const RUBIK_BOLD_FONT = require.resolve("@fontsource/rubik/files/rubik-latin-700-normal.woff2");
+const RUBIK_REGULAR_FONT = require.resolve("@fontsource/rubik/files/rubik-latin-400-normal.woff");
+const RUBIK_MEDIUM_FONT = require.resolve("@fontsource/rubik/files/rubik-latin-500-normal.woff");
+const RUBIK_BOLD_FONT = require.resolve("@fontsource/rubik/files/rubik-latin-700-normal.woff");
 
 const getTemplateCanvasConfig = (template) => {
   let fieldsConfig = template.fields_json;
@@ -104,7 +104,7 @@ const generateCertificatePDF = (template, fieldData, outputPath) => {
       doc.text(text, anchored.x, anchored.y, {
         lineBreak: false,
         fill: true,
-        // stroke: true, // Disabling stroke, it can make fonts look weird
+        stroke: true,
       });
     });
 
@@ -168,7 +168,7 @@ const generateCertificatePDFBuffer = (template, fieldData) => {
       doc.text(text, anchored.x, anchored.y, {
         lineBreak: false,
         fill: true,
-        // stroke: true, // Disabling stroke, it can make fonts look weird
+        stroke: true,
       });
     });
 
