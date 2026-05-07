@@ -4,6 +4,7 @@
   "description": "",
   "main": "index.js",
   "dependencies": {
+    "@fontsource/rubik": "^5.2.8",
     "accepts": "^2.0.0",
     "aws-ssl-profiles": "^1.1.2",
     "axios": "^1.15.0",

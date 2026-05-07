@@ -2,6 +2,10 @@ const PDFDocument = require("pdfkit");
 const fs = require("fs");
 const path = require("path");
 
+const RUBIK_REGULAR_FONT = require.resolve("@fontsource/rubik/files/rubik-latin-400-normal.woff2");
+const RUBIK_MEDIUM_FONT = require.resolve("@fontsource/rubik/files/rubik-latin-500-normal.woff2");
+const RUBIK_BOLD_FONT = require.resolve("@fontsource/rubik/files/rubik-latin-700-normal.woff2");
+
 const getTemplateCanvasConfig = (template) => {
   let fieldsConfig = template.fields_json;
   if (typeof fieldsConfig === "string") {
@@ -56,6 +60,9 @@ const generateCertificatePDF = (template, fieldData, outputPath) => {
 
     const stream = fs.createWriteStream(outputPath);
     doc.pipe(stream);
+    doc.registerFont("Rubik", RUBIK_REGULAR_FONT);
+    doc.registerFont("Rubik-Medium", RUBIK_MEDIUM_FONT);
+    doc.registerFont("Rubik-Bold", RUBIK_BOLD_FONT);
 
     // Background image
     if (template.background_url) {
@@ -89,7 +96,7 @@ const generateCertificatePDF = (template, fieldData, outputPath) => {
       const originX = "center";
       const originY = "center";
 
-      doc.font("Helvetica-Bold").fontSize(fontSize).fillColor(fontColor).strokeColor(fontColor).lineWidth(0.35);
+      doc.font("Rubik-Medium").fontSize(fontSize).fillColor(fontColor).strokeColor(fontColor).lineWidth(0.35);
 
       const text = String(value);
       const anchored = getAnchoredTextPosition(doc, text, x, y, originX, originY, fontSize);
@@ -122,6 +129,9 @@ const generateCertificatePDFBuffer = (template, fieldData) => {
     doc.on("data", (chunk) => chunks.push(chunk));
     doc.on("end", () => resolve(Buffer.concat(chunks)));
     doc.on("error", reject);
+    doc.registerFont("Rubik", RUBIK_REGULAR_FONT);
+    doc.registerFont("Rubik-Medium", RUBIK_MEDIUM_FONT);
+    doc.registerFont("Rubik-Bold", RUBIK_BOLD_FONT);
 
     if (template.background_url) {
       try {
@@ -150,7 +160,7 @@ const generateCertificatePDFBuffer = (template, fieldData) => {
       const originX = "center";
       const originY = "center";
 
-      doc.font("Helvetica-Bold").fontSize(fontSize).fillColor(fontColor).strokeColor(fontColor).lineWidth(0.35);
+      doc.font("Rubik-Medium").fontSize(fontSize).fillColor(fontColor).strokeColor(fontColor).lineWidth(0.35);
 
       const text = String(value);
       const anchored = getAnchoredTextPosition(doc, text, x, y, originX, originY, fontSize);
